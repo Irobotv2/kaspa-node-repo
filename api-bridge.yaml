@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-bridge
+  namespace: kaspa-testnet10
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-bridge
+  template:
+    metadata:
+      labels:
+        app: api-bridge
+    spec:
+      containers:
+      - name: api-bridge
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-bridge
+  namespace: kaspa-testnet10
+spec:
+  selector:
+    app: api-bridge
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80

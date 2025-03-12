@@ -1,0 +1,82 @@
+services:
+  # Kaspa Node - Testnet 10
+  kaspad_testnet10:
+    container_name: kaspad_testnet10
+    image: supertypo/rusty-kaspad:latest
+    restart: unless-stopped
+    ports:
+      - "16210:16210"
+      - "16211:16211"
+      - "17210:17210"
+    volumes:
+      - kaspad_testnet10_data:/app/data/
+    command: kaspad --yes --nologfiles --disable-upnp --utxoindex --testnet --netsuffix=10 --rpclisten=0.0.0.0:16210 --rpclisten-borsh=0.0.0.0:17210
+
+  # PostgreSQL Database
+  kaspa_db:
+    container_name: kaspa_db_testnet10
+    image: postgres:16-alpine
+    restart: unless-stopped
+    shm_size: 4G
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "127.0.0.1:5432:5432" # Only accessible locally
+    volumes:
+      - kaspa_db_testnet10_data:/var/lib/postgresql/data/
+
+  # Kaspa REST API Server
+  kaspa_rest_server:
+    container_name: kaspa_rest_server_testnet10
+    image: kaspanet/kaspa-rest-server:latest
+    restart: unless-stopped
+    environment:
+      KASPAD_HOST_1: kaspad_testnet10:16210
+      SQL_URI: postgresql+asyncpg://postgres:postgres@kaspa_db:5432/postgres
+      CORS_ALLOW_ORIGINS: "*" # Allow cross-origin requests
+      NETWORK_TYPE: "testnet"
+      TESTNET_SUFFIX: "10"
+    ports:
+      - "0.0.0.0:8000:8000" # Explicitly bind to all interfaces for international access
+    depends_on:
+      - kaspad_testnet10
+      - kaspa_db
+
+  # Kaspa WebSocket Server
+  simply_kaspa_socket_server:
+    container_name: simply_kaspa_socket_server_testnet10
+    image: supertypo/simply-kaspa-socket-server:unstable
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:8001:8000" # Explicitly bind to all interfaces for international access
+    command: -x 20 -s ws://kaspad_testnet10:17210 --network=testnet-10
+    depends_on:
+      - kaspad_testnet10
+
+  # Kaspa Indexer
+  simply_kaspa_indexer:
+    container_name: simply_kaspa_indexer_testnet10
+    image: supertypo/simply-kaspa-indexer:latest
+    restart: unless-stopped
+    command: -u -s ws://kaspad_testnet10:17210 -d postgresql://postgres:postgres@kaspa_db:5432/postgres --network=testnet-10
+    depends_on:
+      - kaspad_testnet10
+      - kaspa_db
+
+  # API Bridge with HTTP only for now
+  api_bridge:
+    container_name: api_bridge
+    image: nginx:alpine
+    ports:
+      - "80:80" # Keep this if you need it for other purposes
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - kaspa_rest_server
+      - simply_kaspa_socket_server
+
+volumes:
+  kaspad_testnet10_data:
+  kaspa_db_testnet10_data:
